@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 from types import TracebackType
 from typing import Any, Dict, Optional
 
@@ -11,7 +12,7 @@ from .models import TaskId, TaskSubmissionRequest
 from .streams import AsyncTaskStatusStream
 from .types import ResponseHook, TaskStatusCallback, TaskSubmissionOptions
 from .utils import extract_error_message, merge_options, validate_task_status
-from .sync_client import DEFAULT_BASE_URL, _headers
+from .sync_client import DEFAULT_BASE_URL, MOCK_RESULT, _headers
 
 
 class AsyncTaskForceAIClient:
@@ -19,20 +20,24 @@ class AsyncTaskForceAIClient:
 
     def __init__(
         self,
-        api_key: str,
+        api_key: str = "",
         *,
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = 30.0,
         transport: Optional[httpx.AsyncBaseTransport] = None,
         response_hook: Optional[ResponseHook] = None,
+        mock_mode: bool = False,
     ) -> None:
-        if not api_key.strip():
+        self._mock_mode = mock_mode
+        self._mock_call_count: Dict[str, int] = {}
+
+        if not mock_mode and not api_key.strip():
             raise TaskForceAIError("API key must be a non-empty string")
 
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
-        self._client = httpx.AsyncClient(timeout=timeout, transport=transport)
+        self._client = httpx.AsyncClient(timeout=timeout, transport=transport) if not mock_mode else None
         self._response_hook = response_hook
 
     async def __aenter__(self) -> "AsyncTaskForceAIClient":
@@ -47,7 +52,34 @@ class AsyncTaskForceAIClient:
         await self.close()
 
     async def close(self) -> None:
-        await self._client.aclose()
+        if self._client:
+            await self._client.aclose()
+
+    def _mock_response(
+        self,
+        method: str,
+        endpoint: str,
+        json: Optional[Dict[str, Any]] = None,
+    ) -> Any:
+        """Generate mock responses for development without an API key."""
+        if method == "POST" and endpoint == "/run":
+            task_id = f"mock-{uuid.uuid4().hex[:8]}"
+            self._mock_call_count[task_id] = 0
+            return {"taskId": task_id, "status": "processing"}
+
+        if endpoint.startswith("/status/"):
+            task_id = endpoint.split("/")[-1]
+            count = self._mock_call_count.get(task_id, 0)
+            self._mock_call_count[task_id] = count + 1
+            if count < 1:
+                return {"taskId": task_id, "status": "processing", "message": "Mock task processing..."}
+            return {"taskId": task_id, "status": "completed", "result": MOCK_RESULT}
+
+        if endpoint.startswith("/results/"):
+            task_id = endpoint.split("/")[-1]
+            return {"taskId": task_id, "status": "completed", "result": MOCK_RESULT}
+
+        return {"status": "ok"}
 
     async def _request(
         self,
@@ -55,6 +87,9 @@ class AsyncTaskForceAIClient:
         endpoint: str,
         json: Optional[Dict[str, Any]] = None,
     ) -> Any:
+        if self._mock_mode:
+            return self._mock_response(method, endpoint, json)
+
         url = f"{self._base_url}{endpoint}"
         try:
             response = await self._client.request(

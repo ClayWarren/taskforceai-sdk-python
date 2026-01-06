@@ -6,6 +6,7 @@ The official Python client for TaskForceAI's multi-agent orchestration platform.
 - ✅ Automatic authentication with your TaskForceAI API key
 - ✅ Convenience helpers for polling task completion
 - ✅ Rich error handling with status codes and retry-ready exceptions
+- ✅ Mock mode for development without an API key
 
 ## Installation
 
@@ -39,6 +40,22 @@ task_id = client.submit_task(
     options={"agents": 4, "budget": 12},
 )
 ```
+
+### Mock Mode
+
+Build and test your integration without an API key using mock mode:
+
+```python
+from taskforceai import TaskForceAIClient
+
+# No API key required in mock mode
+client = TaskForceAIClient(mock_mode=True)
+
+result = client.run_task("Test your integration")
+print(result.result)  # "This is a mock response. Configure your API key to get real results."
+```
+
+Mock mode simulates the full task lifecycle locally—no network requests are made. Tasks go through "processing" then "completed" states, making it easy to build UIs and test error handling before launch.
 
 ### Async Variant
 
