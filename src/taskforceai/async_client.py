@@ -10,9 +10,9 @@ import httpx
 from .exceptions import TaskForceAIError
 from .models import TaskId, TaskSubmissionRequest
 from .streams import AsyncTaskStatusStream
+from .sync_client import DEFAULT_BASE_URL, MOCK_RESULT, _headers
 from .types import ResponseHook, TaskStatusCallback, TaskSubmissionOptions
 from .utils import extract_error_message, merge_options, validate_task_status
-from .sync_client import DEFAULT_BASE_URL, MOCK_RESULT, _headers
 
 
 class AsyncTaskForceAIClient:
@@ -37,7 +37,9 @@ class AsyncTaskForceAIClient:
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
-        self._client = httpx.AsyncClient(timeout=timeout, transport=transport) if not mock_mode else None
+        self._client = (
+            httpx.AsyncClient(timeout=timeout, transport=transport) if not mock_mode else None
+        )
         self._response_hook = response_hook
 
     async def __aenter__(self) -> "AsyncTaskForceAIClient":
@@ -72,7 +74,11 @@ class AsyncTaskForceAIClient:
             count = self._mock_call_count.get(task_id, 0)
             self._mock_call_count[task_id] = count + 1
             if count < 1:
-                return {"taskId": task_id, "status": "processing", "message": "Mock task processing..."}
+                return {
+                    "taskId": task_id,
+                    "status": "processing",
+                    "message": "Mock task processing...",
+                }
             return {"taskId": task_id, "status": "completed", "result": MOCK_RESULT}
 
         if endpoint.startswith("/results/"):
@@ -118,6 +124,7 @@ class AsyncTaskForceAIClient:
         options: Optional[TaskSubmissionOptions] = None,
         silent: Optional[bool] = None,
         mock: Optional[bool] = None,
+        model_id: Optional[str] = None,
         vercel_ai_key: Optional[str] = None,
     ) -> TaskId:
         if not prompt.strip():
@@ -126,6 +133,7 @@ class AsyncTaskForceAIClient:
         request_model = TaskSubmissionRequest(
             prompt=prompt,
             options=merge_options(options, silent=silent, mock=mock),
+            model_id=model_id,
             vercel_ai_key=vercel_ai_key,
         )
         payload = request_model.model_dump(by_alias=True, exclude_none=True)
@@ -172,23 +180,25 @@ class AsyncTaskForceAIClient:
         options: Optional[TaskSubmissionOptions] = None,
         silent: Optional[bool] = None,
         mock: Optional[bool] = None,
+        model_id: Optional[str] = None,
         vercel_ai_key: Optional[str] = None,
         poll_interval: float = 2.0,
         max_attempts: int = 150,
         on_status: Optional[TaskStatusCallback] = None,
     ) -> Any:
         task_id = await self.submit_task(
-          prompt,
-          options=options,
-          silent=silent,
-          mock=mock,
-          vercel_ai_key=vercel_ai_key,
+            prompt,
+            options=options,
+            silent=silent,
+            mock=mock,
+            model_id=model_id,
+            vercel_ai_key=vercel_ai_key,
         )
         return await self.wait_for_completion(
-          task_id,
-          poll_interval=poll_interval,
-          max_attempts=max_attempts,
-          on_status=on_status,
+            task_id,
+            poll_interval=poll_interval,
+            max_attempts=max_attempts,
+            on_status=on_status,
         )
 
     def stream_task_status(
@@ -216,6 +226,7 @@ class AsyncTaskForceAIClient:
         options: Optional[TaskSubmissionOptions] = None,
         silent: Optional[bool] = None,
         mock: Optional[bool] = None,
+        model_id: Optional[str] = None,
         vercel_ai_key: Optional[str] = None,
         poll_interval: float = 2.0,
         max_attempts: int = 150,
@@ -226,6 +237,7 @@ class AsyncTaskForceAIClient:
             options=options,
             silent=silent,
             mock=mock,
+            model_id=model_id,
             vercel_ai_key=vercel_ai_key,
         )
         return AsyncTaskStatusStream(

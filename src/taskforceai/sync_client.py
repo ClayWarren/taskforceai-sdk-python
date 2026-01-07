@@ -82,7 +82,11 @@ class TaskForceAIClient:
             count = self._mock_call_count.get(task_id, 0)
             self._mock_call_count[task_id] = count + 1
             if count < 1:
-                return {"taskId": task_id, "status": "processing", "message": "Mock task processing..."}
+                return {
+                    "taskId": task_id,
+                    "status": "processing",
+                    "message": "Mock task processing...",
+                }
             return {"taskId": task_id, "status": "completed", "result": MOCK_RESULT}
 
         if endpoint.startswith("/results/"):
@@ -128,6 +132,7 @@ class TaskForceAIClient:
         options: Optional[TaskSubmissionOptions] = None,
         silent: Optional[bool] = None,
         mock: Optional[bool] = None,
+        model_id: Optional[str] = None,
         vercel_ai_key: Optional[str] = None,
     ) -> TaskId:
         if not prompt.strip():
@@ -136,6 +141,7 @@ class TaskForceAIClient:
         request_model = TaskSubmissionRequest(
             prompt=prompt,
             options=merge_options(options, silent=silent, mock=mock),
+            model_id=model_id,
             vercel_ai_key=vercel_ai_key,
         )
 
@@ -182,6 +188,7 @@ class TaskForceAIClient:
         options: Optional[TaskSubmissionOptions] = None,
         silent: Optional[bool] = None,
         mock: Optional[bool] = None,
+        model_id: Optional[str] = None,
         vercel_ai_key: Optional[str] = None,
         poll_interval: float = 2.0,
         max_attempts: int = 150,
@@ -192,6 +199,7 @@ class TaskForceAIClient:
             options=options,
             silent=silent,
             mock=mock,
+            model_id=model_id,
             vercel_ai_key=vercel_ai_key,
         )
         return self.wait_for_completion(
@@ -226,6 +234,7 @@ class TaskForceAIClient:
         options: Optional[TaskSubmissionOptions] = None,
         silent: Optional[bool] = None,
         mock: Optional[bool] = None,
+        model_id: Optional[str] = None,
         vercel_ai_key: Optional[str] = None,
         poll_interval: float = 2.0,
         max_attempts: int = 150,
@@ -236,7 +245,15 @@ class TaskForceAIClient:
             options=options,
             silent=silent,
             mock=mock,
+            model_id=model_id,
             vercel_ai_key=vercel_ai_key,
+        )
+        return TaskStatusStream(
+            self,
+            task_id,
+            poll_interval=poll_interval,
+            max_attempts=max_attempts,
+            on_status=on_status,
         )
         return TaskStatusStream(
             self,
