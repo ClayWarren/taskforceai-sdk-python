@@ -28,10 +28,16 @@ print(status["result"])
 ```
 
 ```python
-# Bring your own Vercel AI Gateway key (unlocks premium models)
+# Select a specific model (Pro/Super plans)
 task_id = client.submit_task(
     "Draft a quarterly strategy update.",
-    vercel_ai_key="sk-vercel-your-gateway-key",
+    model_id="xai/grok-4.1"
+)
+
+# Bring your own Vercel AI Gateway key
+task_id = client.submit_task(
+    "Custom model run",
+    vercel_ai_key="sk-vercel-your-gateway-key"
 )
 
 # Forward arbitrary TaskForceAI orchestration options
@@ -59,7 +65,7 @@ Mock mode simulates the full task lifecycle locally—no network requests are ma
 
 ### Async Variant
 
-````python
+```python
 import asyncio
 from taskforceai import AsyncTaskForceAIClient
 
@@ -69,6 +75,7 @@ async def main() -> None:
         print(result["result"])
 
 asyncio.run(main())
+```
 
 ### Streaming Task Updates
 
@@ -83,18 +90,16 @@ for status in stream:
 
 # Cancel locally if needed
 # stream.cancel()
-````
+```
 
 Async projects can use `AsyncTaskForceAIClient.stream_task_status()` and iterate with
 `async for status in stream` for non-blocking workflows.
-
-````
 
 ## API Surface
 
 Both clients expose the same methods:
 
-- `submit_task(prompt, *, options=None, silent=None, mock=None, vercel_ai_key=None) -> str`
+- `submit_task(prompt, *, options=None, silent=None, mock=None, model_id=None, vercel_ai_key=None) -> str`
 - `get_task_status(task_id) -> dict`
 - `get_task_result(task_id) -> dict`
 - `wait_for_completion(task_id, poll_interval=2.0, max_attempts=150, on_status=None) -> dict`
@@ -118,7 +123,7 @@ pytest packages/python-sdk/tests
 ruff format packages/python-sdk/src packages/python-sdk/tests -q
 ruff check packages/python-sdk/src packages/python-sdk/tests
 mypy --config-file packages/python-sdk/pyproject.toml packages/python-sdk/src
-````
+```
 
 ## License
 
