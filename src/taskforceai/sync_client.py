@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 import uuid
 from types import TracebackType
-from typing import Any, Dict, Optional
+from typing import Any, BinaryIO, Dict, Optional, Union
 
 import httpx
 
@@ -12,6 +12,15 @@ from .models import TaskId, TaskSubmissionRequest
 from .streams import TaskStatusStream
 from .types import ResponseHook, TaskStatusCallback, TaskSubmissionOptions
 from .utils import extract_error_message, merge_options, validate_task_status
+from .threads import (
+    Thread,
+    CreateThreadOptions,
+    ThreadListResponse,
+    ThreadMessagesResponse,
+    ThreadRunOptions,
+    ThreadRunResponse,
+)
+from .files import File, FileUploadOptions, FileListResponse
 
 DEFAULT_BASE_URL = "https://taskforceai.chat/api/developer"
 
@@ -255,10 +264,139 @@ class TaskForceAIClient:
             max_attempts=max_attempts,
             on_status=on_status,
         )
-        return TaskStatusStream(
-            self,
-            task_id,
-            poll_interval=poll_interval,
-            max_attempts=max_attempts,
-            on_status=on_status,
+
+    # Thread methods
+    def create_thread(
+        self,
+        options: Optional[CreateThreadOptions] = None,
+    ) -> Thread:
+        """Create a new conversation thread."""
+        payload = options.model_dump(exclude_none=True) if options else {}
+        data = self._request("POST", "/threads", json=payload)
+        return Thread.model_validate(data)
+
+    def list_threads(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> ThreadListResponse:
+        """List conversation threads."""
+        data = self._request("GET", f"/threads?limit={limit}&offset={offset}")
+        return ThreadListResponse.model_validate(data)
+
+    def get_thread(self, thread_id: int) -> Thread:
+        """Get a specific thread by ID."""
+        data = self._request("GET", f"/threads/{thread_id}")
+        return Thread.model_validate(data)
+
+    def delete_thread(self, thread_id: int) -> None:
+        """Delete a thread by ID."""
+        self._request("DELETE", f"/threads/{thread_id}")
+
+    def get_thread_messages(
+        self,
+        thread_id: int,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> ThreadMessagesResponse:
+        """Get messages from a thread."""
+        data = self._request(
+            "GET", f"/threads/{thread_id}/messages?limit={limit}&offset={offset}"
         )
+        return ThreadMessagesResponse.model_validate(data)
+
+    def run_in_thread(
+        self,
+        thread_id: int,
+        options: ThreadRunOptions,
+    ) -> ThreadRunResponse:
+        """Submit a prompt within a thread context."""
+        if not options.prompt.strip():
+            raise TaskForceAIError("Prompt must be a non-empty string")
+        payload = options.model_dump(by_alias=True, exclude_none=True)
+        data = self._request("POST", f"/threads/{thread_id}/runs", json=payload)
+        return ThreadRunResponse.model_validate(data)
+
+    # File methods
+    def upload_file(
+        self,
+        filename: str,
+        content: Union[bytes, BinaryIO],
+        options: Optional[FileUploadOptions] = None,
+    ) -> File:
+        """Upload a file."""
+        if self._mock_mode:
+            return File(
+                id="mock-file-id",
+                filename=filename,
+                purpose=options.purpose if options else "general",
+                bytes=0,
+                created_at=time.time(),
+            )
+
+        url = f"{self._base_url}/files"
+        files = {"file": (filename, content)}
+        data = {}
+        if options:
+            if options.purpose:
+                data["purpose"] = options.purpose
+            if options.mime_type:
+                data["mime_type"] = options.mime_type
+
+        try:
+            response = self._client.post(
+                url,
+                files=files,
+                data=data,
+                headers={"x-api-key": self._api_key},
+                timeout=self._timeout,
+            )
+            if self._response_hook:
+                self._response_hook(response)
+            response.raise_for_status()
+            return File.model_validate(response.json())
+        except httpx.HTTPStatusError as exc:
+            message = extract_error_message(exc.response)
+            raise TaskForceAIError(message, status_code=exc.response.status_code) from exc
+        except httpx.HTTPError as exc:
+            raise TaskForceAIError(f"Network error: {exc}") from exc
+
+    def list_files(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> FileListResponse:
+        """List uploaded files."""
+        data = self._request("GET", f"/files?limit={limit}&offset={offset}")
+        return FileListResponse.model_validate(data)
+
+    def get_file(self, file_id: str) -> File:
+        """Get file metadata by ID."""
+        data = self._request("GET", f"/files/{file_id}")
+        return File.model_validate(data)
+
+    def delete_file(self, file_id: str) -> None:
+        """Delete a file by ID."""
+        self._request("DELETE", f"/files/{file_id}")
+
+    def download_file(self, file_id: str) -> bytes:
+        """Download file content."""
+        if self._mock_mode:
+            return b"mock file content"
+
+        url = f"{self._base_url}/files/{file_id}/content"
+        try:
+            response = self._client.get(
+                url,
+                headers={"x-api-key": self._api_key},
+                timeout=self._timeout,
+            )
+            if self._response_hook:
+                self._response_hook(response)
+            response.raise_for_status()
+            return response.content
+        except httpx.HTTPStatusError as exc:
+            message = extract_error_message(exc.response)
+            raise TaskForceAIError(message, status_code=exc.response.status_code) from exc
+        except httpx.HTTPError as exc:
+            raise TaskForceAIError(f"Network error: {exc}") from exc

@@ -16,6 +16,20 @@ from .streams import (
     AsyncTaskStatusStream,
     TaskStatusStream,
 )
+from .threads import (
+    Thread,
+    ThreadMessage,
+    CreateThreadOptions,
+    ThreadListResponse,
+    ThreadMessagesResponse,
+    ThreadRunOptions,
+    ThreadRunResponse,
+)
+from .files import (
+    File,
+    FileUploadOptions,
+    FileListResponse,
+)
 
 __version__ = version("taskforceai")
 
@@ -31,5 +45,17 @@ __all__ = [
     "TaskSubmissionRequest",
     "TaskStatusStream",
     "AsyncTaskStatusStream",
+    # Thread types
+    "Thread",
+    "ThreadMessage",
+    "CreateThreadOptions",
+    "ThreadListResponse",
+    "ThreadMessagesResponse",
+    "ThreadRunOptions",
+    "ThreadRunResponse",
+    # File types
+    "File",
+    "FileUploadOptions",
+    "FileListResponse",
     "__version__",
 ]
